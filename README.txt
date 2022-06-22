@@ -1,5 +1,19 @@
 进程内存操作工具
 
+介绍
+
+一个使用C实现的Linux/Android进程内存读写工具
+
+依赖
+
+libc
+
+构建
+
+cc main.c -o memctl
+
+使用
+
 v 为已经实现
 x 为未实现
 
