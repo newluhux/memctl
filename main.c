@@ -380,7 +380,9 @@ int commands(FILE *input) {
 		strcpy(line,temp);
 		free(temp);
 		
-		if (matchstrhead(line,"quit")) {
+		if (matchstrhead(line,"#")) { // 忽略注释
+			continue;
+		} else if (matchstrhead(line,"quit")) {
 			do_exit();
 		} else if (matchstrhead(line,"exit")) {
 			do_exit();
