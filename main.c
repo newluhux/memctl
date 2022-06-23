@@ -32,7 +32,7 @@ typedef struct map map;
 map *map_init(void);
 int map_parser(char *mapsline, map *m);
 int map_free(map *m);
-int map_show(map *m);
+int map_show(map *m,FILE *output);
 
 struct process {
 	pid_t pid;
@@ -44,13 +44,33 @@ typedef struct process process;
 process *process_init(void);
 int process_open(pid_t pid,process *p);
 int process_close(process *p);
-void process_show(process *p);
+int process_show(process *p,FILE *output);
 size_t process_mem_read(pid_t pid,void *addr,size_t len,void *buf);
 size_t process_mem_write(pid_t pid,void *addr,size_t len,void *buf);
 size_t process_mem_read_map(pid_t pid,map *map, void *buf);
 size_t process_mem_write_map(pid_t pid,map *map, void *buf);
 size_t process_mem_save_map(pid_t pid,map *map,int outfd);
 int process_mem_save_map_all(process *p,char *fnprefix);
+
+#define MAX_ARGC 20
+
+struct cmd {
+	int argc;
+	char *argv[MAX_ARGC];
+};
+typedef struct cmd cmd;
+
+cmd *cmd_init(void);
+int cmd_free(cmd *c);
+int cmd_parser(char *line,cmd *c);
+int cmd_execute(cmd *c,process *p,FILE *in, FILE *out);
+int cmd_loop(FILE *in,FILE *out);
+
+void do_exit(void);
+int do_open(process *p,pid_t pid);
+int do_close(process **p);
+int do_info(process *p,FILE *out);
+int do_dumpall(process *p,char *prefix);
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -146,20 +166,20 @@ void show_perms(int prot,int flags) {
 
 
 
-int map_show(map *m) {
-	if (m == NULL)
+int map_show(map *m,FILE *output) {
+	if (m == NULL || output == NULL)
 		return -1;
-	printf("virtual memory address range: %lx-%lx\n",
+	fprintf(output,"virtual memory address range: %lx-%lx\n",
 			(unsigned long)m->addr_start,
 			(unsigned long)m->addr_end);
 	show_perms(m->prot,m->flags);
-	printf("offset: %lx\n",m->offset);
-	printf("dev: %d:%d\n",m->dev_major,m->dev_minor);
-	printf("inode: %ld\n",m->inode);
-	printf("pathname: ");
+	fprintf(output,"offset: %lx\n",m->offset);
+	fprintf(output,"dev: %d:%d\n",m->dev_major,m->dev_minor);
+	fprintf(output,"inode: %ld\n",m->inode);
+	fprintf(output,"pathname: ");
 	if (m->pathname != NULL)
-		printf("%s",m->pathname);
-	putchar('\n');
+		fprintf(output,"%s",m->pathname);
+	putc('\n',output);
 	return 1;
 }
 
@@ -203,16 +223,38 @@ int process_close(process *p) {
 	return p->regions;
 }
 
-void process_show(process *p) {
+int process_show(process *p,FILE *output) {
 	if (p == NULL)
-		return;
+		return -1;
 	int i;
 	for (i=0;i<p->regions;i++) {
-		map_show(p->maps[i]);
+		map_show(p->maps[i],output);
 		putchar('\n');
 	}
-	return;
+	return 1;
 }
+
+int is_addr_in_map(void *addr,map *m) {
+	if (m == NULL || addr == NULL)
+		return -1;
+	if (addr >= m->addr_start &&
+		addr <= m->addr_end) {
+		return 1;
+	}
+	return -1;
+}
+
+int is_addr_in_process(void *addr,process *p) {
+	int i;
+	for (i=0;i<p->regions;i++) {
+		if (is_addr_in_map(addr,p->maps[i]) == 1) {
+			return 1;
+		}
+	}
+	return -1;
+}
+
+
 
 // pid 目标进程的pid
 // addr 目标进程的内存地址
@@ -321,96 +363,140 @@ int process_mem_save_map_all(process *p,char *fnprefix) {
 	return count;
 }
 
-// 如果pattern在s的头部，则返回1，
-int matchstrhead(char *s,char *pattern) {
-	int ret = 0;
-	if (strstr(s,pattern) == s)
-		return 1;
-	else
-		return 0;
+cmd *cmd_init(void) {
+	cmd *c = (cmd *)calloc(1,sizeof(*c));
+	if (c == NULL)
+		return NULL;
+	c->argc = 0;
+	int i;
+	for (i=0;i<MAX_ARGC;i++) {
+		c->argv[i] = NULL;
+	}
+	return c;
 }
 
-process *proc = NULL;
+int cmd_free(cmd *c) {
+	int i;
+	for (i=0;i<c->argc;i++) {
+		free(c->argv[i]);
+	}
+	free(c);
+	return 1;
+}
+
+int cmd_parser(char *line,cmd *c) {
+	if (line == NULL || c == NULL)
+		return -1;
+	char *token = NULL;
+
+	token = strtok(line," "); // 获取命令
+	if (token != NULL) {
+		c->argv[c->argc] = strstripwhite(token);
+		c->argc++;
+	}
+	while ((token = strtok(NULL," \n")) != NULL) {
+		c->argv[c->argc] = strstripwhite(token);
+		c->argc++;
+	}
+	return 1;
+}
+
+int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
+	if (c == NULL)
+		return -1;
+	if (c->argc <= 0)
+		return -1;
+	int ret = 0;
+
+	char *argv0 = c->argv[0];
+	if ((strcmp(argv0,"exit") == 0) || (strcmp(argv0,"quit") == 0)) {
+		do_exit();
+	} else if (strcmp(argv0,"open") == 0) {
+		if (c->argc < 2)
+			ret = -1;
+		else
+			ret = do_open(p,atoi(c->argv[1]));
+	} else if (strcmp(argv0,"close") == 0) {
+		ret = do_close(&p);
+	} else if (strcmp(argv0,"info") == 0) {
+		ret = do_info(p,out);
+	} else if (strcmp(argv0,"dumpall") == 0) {
+		if (c->argc < 2)
+			ret = -1;
+		else
+			ret = do_dumpall(p,c->argv[1]);
+	} else {
+		fprintf(out,"?\n");
+	}
+	if (ret < 0) {
+		fprintf(out,"?\n");
+	}
+}
+
+int cmd_loop(FILE *in,FILE *out) {
+	if (in == NULL || out == NULL)
+		return -1;
+	process *proc = process_init();
+	if (proc == NULL)
+		return -1;
+	char line[LINEMAX];
+	cmd *command = NULL;
+
+	while (fgets(line,LINEMAX,in) != NULL) {
+		command = cmd_init();
+		if (command == NULL)
+			return -1;
+		cmd_parser(line,command);
+		cmd_execute(command, proc,in,out);
+		cmd_free(command);
+	}
+	do_close(&proc);
+	return 1;
+}
+
 
 void do_exit(void) {
-	if (proc != NULL)
-		process_close(proc);
 	exit(EXIT_SUCCESS);
 }
 
-int do_open(char *cmd,process *p) {
-	if (cmd == NULL || p == NULL)
+int do_open(process *p,pid_t pid) {
+	if (p == NULL)
 		return -1;
-	if (p->pid > 0) { // 已经被使用
-		return -1;
-	}
-
-	pid_t pid = 0;
-	sscanf(cmd,"open %d",&pid);
-	if (pid == 0)
+	if (p->pid > 0 || // p 已被使用
+		pid <= 0)
 		return -1;
 		
 	return (process_open(pid,p));
 }
 
-int do_dumpall(char *cmd,process *p) {
-	if (cmd == NULL || p == NULL)
+int do_close(process **p) {
+	if (p == NULL)
 		return -1;
-	cmd += strlen("dumpall");
-	cmd = strstripwhite(cmd);
-	char prefix[PATH_MAX];
-	strncpy(prefix,cmd,PATH_MAX);
-	free(cmd);
-	return (process_mem_save_map_all(p,prefix));
+	process_close(*p);
+	*p = NULL;
+	return 1;
 }
 
-int commands(FILE *input) {
-	if (input == NULL)
-		return 0;
+int do_info(process *p,FILE *out) {
+	if (p == NULL)
+		return -1;
+	return (process_show(p,out));
+}
 
-	int ret = 0;
-	char line[LINEMAX]; // 输入行
-	char *temp; // 临时存放字符串指针
-
-	proc = process_init();
-
-	while (fgets(line,LINEMAX,input) != NULL) {
-		// 删除头部和尾部的空白
-		temp = strstripwhite(line);
-		strcpy(line,temp);
-		free(temp);
-		
-		if (matchstrhead(line,"#")) { // 忽略注释
-			continue;
-		} else if (matchstrhead(line,"quit")) {
-			do_exit();
-		} else if (matchstrhead(line,"exit")) {
-			do_exit();
-		} else if (matchstrhead(line,"open")) {
-			ret = do_open(line,proc);
-		} else if (matchstrhead(line,"close")) {
-			ret = process_close(proc);
-			proc = NULL;
-		} else if (matchstrhead(line,"info")) {
-			process_show(proc);
-		} else if (matchstrhead(line,"dumpall")) {
-			ret = do_dumpall(line,proc);
-		} else { // 如果命令非法
-			printf("?\n");
-		}
-		if (ret == -1) { // 如果函数调用出错
-			printf("?\n");
-			ret = 0;
-		}
-	}
-	return 1;
+int do_dumpall(process *p,char *prefix) {
+	if (p == NULL)
+		return -1;
+	if (prefix == NULL)
+		prefix = "";
+	return (process_mem_save_map_all(p,prefix));
 }
 
 int main(int argc, char *argv[]) {
 	FILE *in = stdin;
+	FILE *out = stdout;
 
-	if (commands(in) == -1) {
-		fprintf(stderr,"Can't read input stream\n");
+	if (cmd_loop(in,out) == -1) {
+		fprintf(stderr,"IO Error\n");
 		exit(EXIT_FAILURE);
 	}
 
