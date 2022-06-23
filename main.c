@@ -68,7 +68,7 @@ int cmd_loop(FILE *in,FILE *out);
 
 void do_exit(void);
 int do_open(process *p,pid_t pid);
-int do_close(process **p);
+int do_close(process *p);
 int do_info(process *p,FILE *out);
 int do_dumpall(process *p,char *prefix);
 
@@ -219,7 +219,6 @@ int process_close(process *p) {
 		map_free(p->maps[i]);
 	}
 	p->regions = 0;
-	free(p);
 	return p->regions;
 }
 
@@ -417,7 +416,7 @@ int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
 		else
 			ret = do_open(p,atoi(c->argv[1]));
 	} else if (strcmp(argv0,"close") == 0) {
-		ret = do_close(&p);
+		ret = do_close(p);
 	} else if (strcmp(argv0,"info") == 0) {
 		ret = do_info(p,out);
 	} else if (strcmp(argv0,"dumpall") == 0) {
@@ -450,7 +449,7 @@ int cmd_loop(FILE *in,FILE *out) {
 		cmd_execute(command, proc,in,out);
 		cmd_free(command);
 	}
-	do_close(&proc);
+	do_close(proc);
 	return 1;
 }
 
@@ -469,11 +468,10 @@ int do_open(process *p,pid_t pid) {
 	return (process_open(pid,p));
 }
 
-int do_close(process **p) {
+int do_close(process *p) {
 	if (p == NULL)
 		return -1;
-	process_close(*p);
-	*p = NULL;
+	process_close(p);
 	return 1;
 }
 
