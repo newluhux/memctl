@@ -45,8 +45,11 @@ process *process_init(void);
 int process_open(pid_t pid,process *p);
 int process_close(process *p);
 int process_show(process *p,FILE *output);
+
 size_t process_mem_read(pid_t pid,void *addr,size_t len,void *buf);
 size_t process_mem_write(pid_t pid,void *addr,size_t len,void *buf);
+size_t process_mem_save(pid_t pid,void *addr,size_t len,int outfd);
+size_t process_mem_savetofile(pid_t pid,void *addr,size_t len,char *fnprefix);
 size_t process_mem_read_map(pid_t pid,map *map, void *buf);
 size_t process_mem_write_map(pid_t pid,map *map, void *buf);
 size_t process_mem_save_map(pid_t pid,map *map,int outfd);
@@ -71,6 +74,7 @@ int do_open(process *p,pid_t pid);
 int do_close(process *p);
 int do_info(process *p,FILE *out);
 int do_dumpall(process *p,char *prefix);
+int do_dump(process *p,unsigned long start,unsigned long end,char *prefix);
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -295,6 +299,41 @@ size_t process_mem_write(pid_t pid,void *addr, size_t len, void *buf) {
 	return len;	
 }
 
+size_t process_mem_save(pid_t pid,void *addr,size_t len,int outfd) {
+	if (addr == NULL || len <= 0 || outfd == -1)
+		return -1;
+	void *buf = calloc(1,sizeof(len));
+	if (buf == NULL)
+		return -1;
+	if (process_mem_read(pid,addr,len,buf) != len) {
+		free(buf);
+		return -1;
+	}
+	size_t nwrite;
+	if ((nwrite = write(outfd,buf,len)) != len) {
+		free(buf);
+		return -1;
+	}
+	free(buf);
+	return nwrite;
+}
+
+size_t process_mem_savetofile(pid_t pid,void *addr,size_t len,char *fnprefix) {
+	if (pid <= 0 || addr == NULL || len <= 0 || fnprefix == NULL)
+		return -1;
+	char path[PATH_MAX];
+	unsigned long start = (unsigned long)addr;
+	unsigned long end = start + len;
+	snprintf(path,PATH_MAX,"%s_%d_%lx-%lx.mem",
+			fnprefix,pid,start,end);
+	int outfd = open(path,O_WRONLY|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR);
+	if (outfd == -1)
+		return -1;
+	if (process_mem_save(pid,addr,len,outfd) != len)
+		return -1;
+	return len;
+}
+
 size_t process_mem_read_map(pid_t pid,map *map,void *buf) {
 	if (map == NULL || buf == NULL)
 		return -1;
@@ -424,6 +463,14 @@ int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
 			ret = -1;
 		else
 			ret = do_dumpall(p,c->argv[1]);
+	} else if (strcmp(argv0,"dump") == 0) {
+		if (c->argc < 4)
+			ret = -1;
+		else
+			ret = do_dump(p,
+						strtoull(c->argv[1],NULL,16),
+						strtoull(c->argv[2],NULL,16),
+						c->argv[3]);
 	} else {
 		fprintf(out,"?\n");
 	}
@@ -487,6 +534,14 @@ int do_dumpall(process *p,char *prefix) {
 	if (prefix == NULL)
 		prefix = "";
 	return (process_mem_save_map_all(p,prefix));
+}
+
+int do_dump(process *p,unsigned long start,unsigned long end,char *prefix) {
+	if (p == NULL || start > end || prefix == NULL)
+		return -1;
+	void *addr_start = (void *)start;
+	size_t len = end - start;
+	return (process_mem_savetofile(p->pid,addr_start,len,prefix));
 }
 
 int main(int argc, char *argv[]) {
