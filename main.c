@@ -75,6 +75,7 @@ int do_close(process *p);
 int do_info(process *p,FILE *out);
 int do_dumpall(process *p,char *prefix);
 int do_dump(process *p,unsigned long start,unsigned long end,char *prefix);
+int do_write(process *p,unsigned long start,char *data);
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -471,6 +472,13 @@ int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
 						strtoull(c->argv[1],NULL,16),
 						strtoull(c->argv[2],NULL,16),
 						c->argv[3]);
+	} else if (strcmp(argv0,"write") == 0) {
+		if (c->argc < 3)
+			ret = -1;
+		else
+			ret = do_write(p,
+						strtoull(c->argv[1],NULL,16),
+						c->argv[2]);
 	} else {
 		fprintf(out,"?\n");
 	}
@@ -542,6 +550,29 @@ int do_dump(process *p,unsigned long start,unsigned long end,char *prefix) {
 	void *addr_start = (void *)start;
 	size_t len = end - start;
 	return (process_mem_savetofile(p->pid,addr_start,len,prefix));
+}
+
+// 十六进制字符串转数据，返回结果的内存地址
+void *strhex2data(char *strhex,size_t *retlen) {
+	size_t buflen = strlen(strhex);
+	unsigned char buf[buflen];
+	sscanf(strhex,"%lx",buf);
+	*retlen = strlen(buf);
+	void *ret = calloc(1,*retlen);
+	memcpy(ret,buf,*retlen);
+	return ret;
+}
+
+int do_write(process *p,unsigned long start,char *data) {
+	if (p == NULL || start <= 0 || data == NULL)
+		return -1;
+	size_t datalen = 0;
+	void *databuf = strhex2data(data,&datalen);
+	if (datalen <= 0) {
+		free(databuf);
+		return -1;
+	}
+	return (process_mem_write(p->pid,(void *)start,datalen,databuf));
 }
 
 int main(int argc, char *argv[]) {
