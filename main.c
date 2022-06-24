@@ -486,7 +486,7 @@ int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
 		else
 			ret = do_print(p,
 						strtoull(c->argv[1],NULL,16),
-						atol(c->argv[2]),
+						strtoull(c->argv[2],NULL,16),
 						out);
 	} else {
 		fprintf(out,"?\n");
