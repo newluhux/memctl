@@ -26,7 +26,7 @@ v close	清理进程
 v dumpall	prefix	将进程的所有内存区域输出到文件 "prefix_pid_start_end.mem" 文件中
 v dump	start	end	prefix	把start到end之间的内存输出到 "prefix_pid_start_end.mem" 文件中
 v write	address	data	往进程的内存地址address写入data
-x print address	length	读取内存区域，使用16进制格式打印
+v print address	length	读取内存区域，使用16进制格式打印
 x search	address	length	data	在内存区域中搜索内容
 
 开发计划:
