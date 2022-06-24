@@ -76,6 +76,7 @@ int do_info(process *p,FILE *out);
 int do_dumpall(process *p,char *prefix);
 int do_dump(process *p,unsigned long start,unsigned long end,char *prefix);
 int do_write(process *p,unsigned long start,char *data);
+int do_print(process *p,unsigned long start,size_t len,FILE *out);
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -479,6 +480,14 @@ int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
 			ret = do_write(p,
 						strtoull(c->argv[1],NULL,16),
 						c->argv[2]);
+	} else if (strcmp(argv0,"print") == 0) {
+		if (c->argc < 3)
+			ret = -1;
+		else
+			ret = do_print(p,
+						strtoull(c->argv[1],NULL,16),
+						atol(c->argv[2]),
+						out);
 	} else {
 		fprintf(out,"?\n");
 	}
@@ -573,6 +582,23 @@ int do_write(process *p,unsigned long start,char *data) {
 		return -1;
 	}
 	return (process_mem_write(p->pid,(void *)start,datalen,databuf));
+}
+
+int do_print(process *p,unsigned long start,size_t len,FILE *out) {
+	if (p == NULL || start <= 0 || len <= 0 || out == NULL)
+		return -1;
+	void *buf = calloc(1,len);
+	if (process_mem_read(p->pid,(void *)start,len,buf) != len) {
+		return -1;
+	}
+	uint8_t c;
+	int i;
+	for (i=0;i<len;i++) {
+		c = *((char *)buf+i);
+		fprintf(out,"%x",c);
+	}
+	free(buf);
+	return 1;
 }
 
 int main(int argc, char *argv[]) {
