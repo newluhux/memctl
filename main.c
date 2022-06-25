@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 
 #include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -29,54 +30,208 @@ struct map {
 };
 typedef struct map map;
 
+/*
+使用calloc分配一个新的map结构的内存空间并初始化
+
+如果成功返回指向新的map结构的指针
+如果出错返回空指针
+*/
+
 map *map_init(void);
+
+/*
+将mapsline解析并存储到m中
+
+mapsline	从/proc/pid/maps中读取的一行
+m			存储解析结果
+
+如果出错返回-1
+*/
+
 int map_parser(char *mapsline, map *m);
+
+/*
+将m结构中的指针所指向的内存释放，并释放m结构本身
+
+如果出错返回-1
+*/
+
 int map_free(map *m);
+
+/*
+格式化打印m结构中内容并打印到output
+
+如果出错返回-1
+*/
+
 int map_show(map *m,FILE *output);
 
 struct process {
-	pid_t pid;
-	int regions;
-	map *maps[MAX_REGIONS];
+	// 存放操作一个进程需要的信息
+	pid_t pid; // 进程号
+	int regions; // 内存区域个数
+	map *maps[MAX_REGIONS]; // 内存区域信息
 };
 typedef struct process process;
 
+/*
+使用calloc分配一个新的process结构需要的内存空间并初始化
+如果成功返回指向新的process结构的指针
+如果出错返回空指针
+*/
+
 process *process_init(void);
+
+/*
+根据pid加载进程信息到p结构
+
+pid		进程pid
+p		存储进程信息的结构
+
+如果出错返回-1
+*/
+
 int process_open(pid_t pid,process *p);
-int process_close(process *p);
+
+/*
+将p结构中的内容重置为0，指针指向的内存释放。
+
+如果出错返回-1
+*/
+
+int process_clean(process *p);
+
+/*
+格式化打印p结构中的信息，并输出到output
+
+如果出错返回-1
+*/
+
 int process_show(process *p,FILE *output);
 
-size_t process_mem_read(pid_t pid,void *addr,size_t len,void *buf);
-size_t process_mem_write(pid_t pid,void *addr,size_t len,void *buf);
-size_t process_mem_save(pid_t pid,void *addr,size_t len,int outfd);
-size_t process_mem_savetofile(pid_t pid,void *addr,size_t len,char *fnprefix);
-size_t process_mem_read_map(pid_t pid,map *map, void *buf);
-size_t process_mem_write_map(pid_t pid,map *map, void *buf);
-size_t process_mem_save_map(pid_t pid,map *map,int outfd);
-int process_mem_save_map_all(process *p,char *fnprefix);
+/*
+读取目标进程的内存到buf
+
+p		目标进程
+addr	目标进程虚拟内存地址
+buf		读取目标进程的内容存入此内存区域，必须大于等于count
+count	从addr开始读取count个字节
+
+如果出错返回-1
+*/
+
+int process_readm(process *p,void *addr,void *buf,size_t count);
+
+/*
+将buf中的内容写到目标进程的内存
+
+p		目标进程
+addr	目标进程的虚拟内存地址
+buf		存放数据的内存区域
+count	数据的长度
+
+如果出错返回-1
+*/
+
+int process_writem(process *p,void *addr,void *buf,size_t count);
+
+/*
+将目标进程的内容读取并写入outfd
+
+p		目标进程
+addr	目标进程的虚拟内存地址
+count	读取的字节数
+outfd	写入的file descriptor
+
+如果出错返回-1
+*/
+
+int process_dumpm(process *p,void *addr,size_t count,int outfd);
 
 #define MAX_ARGC 20
 
 struct cmd {
-	int argc;
-	char *argv[MAX_ARGC];
+	int argc; // 参数个数
+	char *argv[MAX_ARGC]; // 指向每个参数字符串的内存地址
 };
 typedef struct cmd cmd;
 
+/*
+使用calloc分配一个新的cmd结构的内存空间并初始化
+
+如果成功返回指向新的cmd结构的指针
+如果出错返回空指针
+*/
+
 cmd *cmd_init(void);
+
+/*
+将c结构中的指针所指向的内存释放，并释放c结构本身
+
+如果出错返回-1
+*/
+
 int cmd_free(cmd *c);
+
+/*
+解析line，结果存放在c
+
+line	一行命令，以\n结尾
+c		存放解析的结果
+
+如果出错返回-1
+*/
+
 int cmd_parser(char *line,cmd *c);
-int cmd_execute(cmd *c,process *p,FILE *in, FILE *out);
+
+/*
+执行c，作用在p，输入在in，输出在out
+
+c	要执行的结构
+p	作用在的进程
+out	打印输出
+
+如果出错返回-1
+*/
+int cmd_execute(cmd *c,process *p, FILE *out);
+
+/*
+从in循环读入然后解析然后执行结果输出到out
+
+in	输入流
+out	输出流
+
+出错返回-1
+*/
 int cmd_loop(FILE *in,FILE *out);
 
-void do_exit(void);
-int do_open(process *p,pid_t pid);
-int do_close(process *p);
-int do_info(process *p,FILE *out);
-int do_dumpall(process *p,char *prefix);
-int do_dump(process *p,unsigned long start,unsigned long end,char *prefix);
-int do_write(process *p,unsigned long start,char *data);
-int do_print(process *p,unsigned long start,size_t len,FILE *out);
+// 命令对应执行的函数
+struct cmd_call {
+	char *argv0;
+	int (*func)(FILE *out,cmd *c,process *p);
+};
+typedef struct cmd_call cmd_call;
+
+int do_close(FILE *out,cmd *c,process *p);
+int do_dump(FILE *out,cmd *c,process *p);
+int do_info(FILE *out,cmd *c,process *p);
+int do_open(FILE *out,cmd *c,process *p);
+int do_print(FILE *out,cmd *c,process *p);
+int do_write(FILE *out,cmd *c,process *p);
+
+// 命令对应函数列表
+static cmd_call cmd_calls[] = {
+	/*	argv0		function   */
+	{	"close",	do_close,	},
+	{	"dump",		do_dump,	},
+	{	"info",		do_info,	},
+	{	"open",		do_open,	},
+	{	"print",	do_print,	},
+	{	"write",	do_write,	}, 
+	{    NULL,		NULL,		},
+};
+
+
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -84,7 +239,7 @@ map *map_init(void) {
 	return n;
 }
 
-int make_perms(char *perms,int *prot,int *flags) {
+static int make_perms(char *perms,int *prot,int *flags) {
 	if (strlen(perms) != 4 || prot == NULL || flags == NULL)
 		return -1;
 	*prot = PROT_NONE;
@@ -103,7 +258,7 @@ int make_perms(char *perms,int *prot,int *flags) {
 }
 
 // 移除字符串开头和结尾的空白，移除后的结果使用char *指针返回
-char *strstripwhite(const char *s) {
+static char *strstripwhite(const char *s) {
 	char *ns = strdup(s); // 新的字符串用作操作
 	char *saveptr = ns;
 	int len = strlen(ns);
@@ -148,7 +303,7 @@ int map_free(map *m) {
 	return 1;
 }
 
-void show_perms(int prot,int flags) {
+static void show_perms(int prot,int flags) {
 	printf("perms: ");
 	if (prot == PROT_READ)
 		printf("PROT_READ ");
@@ -169,8 +324,6 @@ void show_perms(int prot,int flags) {
 	putchar('\n');
 	return;
 }
-
-
 
 int map_show(map *m,FILE *output) {
 	if (m == NULL || output == NULL)
@@ -217,13 +370,14 @@ int process_open(pid_t pid,process *p) {
 	return p->regions;
 }
 
-int process_close(process *p) {
+int process_clean(process *p) {
 	if (p == NULL)
 		return -1;
 	int i;
 	for (i=0;i<(p->regions);i++) {
 		map_free(p->maps[i]);
 	}
+	p->pid = 0;
 	p->regions = 0;
 	return p->regions;
 }
@@ -239,168 +393,62 @@ int process_show(process *p,FILE *output) {
 	return 1;
 }
 
-int is_addr_in_map(void *addr,map *m) {
-	if (m == NULL || addr == NULL)
+int process_readm(process *p,void *addr,void *buf,size_t count) {
+	if (p == NULL || addr == NULL)
 		return -1;
-	if (addr >= m->addr_start &&
-		addr <= m->addr_end) {
-		return 1;
-	}
-	return -1;
-}
-
-int is_addr_in_process(void *addr,process *p) {
-	int i;
-	for (i=0;i<p->regions;i++) {
-		if (is_addr_in_map(addr,p->maps[i]) == 1) {
-			return 1;
-		}
-	}
-	return -1;
-}
-
-
-
-// pid 目标进程的pid
-// addr 目标进程的内存地址
-// len 要读入的长度
-// buf 读入内存存放的缓存区，大小必须和大于等于 len
-size_t process_mem_read(pid_t pid,void *addr, size_t len, void *buf) {
-	if (addr == NULL || len <= 0 || buf == NULL )
-		return -1;
-	struct iovec localiobuf[1];
-	struct iovec remoteiobuf[1];
-	localiobuf[0].iov_base = buf;
-	localiobuf[0].iov_len = len;
-	remoteiobuf[0].iov_base = addr;
-	remoteiobuf[0].iov_len = len;
-	ssize_t nread;
-	nread = process_vm_readv(pid,localiobuf,1,remoteiobuf,1,0); // 核心就这么一行代码
-	if (nread != (ssize_t)len)
-		return -1;
-	return len;
-}
-
-// pid 目标进程的pid
-// addr 目标进程的内存地址
-// len 要写入的长度
-// buf 准备写入内存存放的缓存区，大小必须大于等于len
-size_t process_mem_write(pid_t pid,void *addr, size_t len, void *buf) {
-	if (addr == NULL || len <= 0 || buf == NULL )
-		return -1;
-	struct iovec localiobuf[1];
-	struct iovec remoteiobuf[1];
-	localiobuf[0].iov_base = buf;
-	localiobuf[0].iov_len = len;
-	remoteiobuf[0].iov_base = addr;
-	remoteiobuf[0].iov_len = len;
-	ssize_t nwrite;
-	nwrite = process_vm_writev(pid,localiobuf,1,remoteiobuf,1,0); // 核心就这么一行代码
-	if (nwrite != (ssize_t)len)
-		return -1;
-	return len;	
-}
-
-size_t process_mem_save(pid_t pid,void *addr,size_t len,int outfd) {
-	if (addr == NULL || len <= 0 || outfd == -1)
-		return -1;
-	void *buf = calloc(1,sizeof(len));
+	if (count == 0)
+		return 0;
 	if (buf == NULL)
 		return -1;
-	if (process_mem_read(pid,addr,len,buf) != len) {
-		free(buf);
+
+	struct iovec localiobuf[1];
+	struct iovec remoteiobuf[1];
+	localiobuf[0].iov_base = buf;
+	localiobuf[0].iov_len = count;
+	remoteiobuf[0].iov_base = addr;
+	remoteiobuf[0].iov_len = count;
+
+	ssize_t nread = process_vm_readv(p->pid,localiobuf,1,remoteiobuf,1,0);
+	if (nread != count)
 		return -1;
-	}
-	size_t nwrite;
-	if ((nwrite = write(outfd,buf,len)) != len) {
-		free(buf);
-		return -1;
-	}
-	free(buf);
-	return nwrite;
+	return 1;
 }
 
-size_t process_mem_savetofile(pid_t pid,void *addr,size_t len,char *fnprefix) {
-	if (pid <= 0 || addr == NULL || len <= 0 || fnprefix == NULL)
+int process_writem(process *p,void *addr,void *buf,size_t count) {
+	if (p == NULL || addr == NULL)
 		return -1;
-	char path[PATH_MAX];
-	unsigned long start = (unsigned long)addr;
-	unsigned long end = start + len;
-	snprintf(path,PATH_MAX,"%s_%d_%lx-%lx.mem",
-			fnprefix,pid,start,end);
-	int outfd = open(path,O_WRONLY|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR);
-	if (outfd == -1)
+	if (count == 0)
+		return 0;
+	if (buf == NULL)
 		return -1;
-	if (process_mem_save(pid,addr,len,outfd) != len)
+
+	struct iovec localiobuf[1];
+	struct iovec remoteiobuf[1];
+	localiobuf[0].iov_base = buf;
+	localiobuf[0].iov_len = count;
+	remoteiobuf[0].iov_base = addr;
+	remoteiobuf[0].iov_len = count;
+
+	ssize_t nwrite = process_vm_writev(p->pid,localiobuf,1,remoteiobuf,1,0);
+	if (nwrite != count)
 		return -1;
-	return len;
+	return 1;
 }
 
-size_t process_mem_read_map(pid_t pid,map *map,void *buf) {
-	if (map == NULL || buf == NULL)
+int process_dumpm(process *p,void *addr,size_t count,int outfd) {
+	if (p == NULL || addr == NULL || outfd == -1)
 		return -1;
-	size_t length = map->addr_end - map->addr_start;
-	if (length <= 0)
-		return -1;
-	if (process_mem_read(pid,map->addr_start,length,buf) != length)
-		return -1;
-	return length;
-}
+	if (count == 0)
+		return 0;
 
-size_t process_mem_write_map(pid_t pid,map *map,void *buf) {
-	if (map == NULL || buf == NULL)
+	unsigned char buf[count];
+	if (process_readm(p,addr,(void *)buf,count) == -1)
 		return -1;
-	size_t length = map->addr_end - map->addr_start;
-	if (length <= 0)
-		return -1;
-	if (process_mem_write(pid,map->addr_start,length,buf) != length)
-		return -1;
-	return length;
-}
-
-size_t process_mem_save_map(pid_t pid,map *map,int outfd) {
-	if (map == NULL || outfd < 0)
-		return -1;
-	int pagesize = sysconf(_SC_PAGE_SIZE);
-	unsigned char buf[pagesize];
-
-	void *addr_cur;
-	for (addr_cur=map->addr_start;addr_cur < map->addr_end;addr_cur+=pagesize) {
-		if (process_mem_read(pid,addr_cur,pagesize,buf)
-		                     != (size_t)pagesize)
-			return -1;
-		if (write(outfd,buf,pagesize) != pagesize)
-			return -1;
-	}
-	return (size_t)(addr_cur - map->addr_start);
-}
-
-int process_mem_save_map_all(process *p,char *fnprefix) {
-	if (p == NULL || fnprefix == NULL)
-		return -1;
-	char output[PATH_MAX];
-	int outfd = -1;
-	int i;
-	int count = 0;
-
-	for (i=0;i<p->regions;i++) {
-		if (p->maps[i]->pathname != NULL)
-			if (strcmp(p->maps[i]->pathname, "[vvar]") == 0)
-				continue;
-		snprintf(output,PATH_MAX,"%s_%d_%lx-%lx.mem",
-				fnprefix,p->pid,
-				(unsigned long)p->maps[i]->addr_start,
-				(unsigned long)p->maps[i]->addr_end);
-		outfd = open(output,O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR);
-		if (outfd == -1)
-			return -1;
-		if (process_mem_save_map(p->pid,p->maps[i],outfd) == -1) {
-			close(outfd);
-			return -1;
-		}
-		count++;
-	}
-	return count;
+write:
+	if (write(outfd,buf,count) != count)
+		if (errno == EINTR)
+			goto write;
+	return 1;
 }
 
 cmd *cmd_init(void) {
@@ -429,7 +477,7 @@ int cmd_parser(char *line,cmd *c) {
 		return -1;
 	char *token = NULL;
 
-	token = strtok(line," "); // 获取命令
+	token = strtok(line," "); // 获取argv0
 	if (token != NULL) {
 		c->argv[c->argc] = strstripwhite(token);
 		c->argc++;
@@ -441,59 +489,22 @@ int cmd_parser(char *line,cmd *c) {
 	return 1;
 }
 
-int cmd_execute(cmd *c,process *p,FILE *in,FILE *out) {
+int cmd_execute(cmd *c,process *p,FILE *out) {
 	if (c == NULL)
 		return -1;
 	if (c->argc <= 0)
 		return -1;
-	int ret = 0;
+	int ret = -1;
 
 	char *argv0 = c->argv[0];
-	if ((strcmp(argv0,"exit") == 0) || (strcmp(argv0,"quit") == 0)) {
-		do_exit();
-	} else if (strcmp(argv0,"open") == 0) {
-		if (c->argc < 2)
-			ret = -1;
-		else
-			ret = do_open(p,atoi(c->argv[1]));
-	} else if (strcmp(argv0,"close") == 0) {
-		ret = do_close(p);
-	} else if (strcmp(argv0,"info") == 0) {
-		ret = do_info(p,out);
-	} else if (strcmp(argv0,"dumpall") == 0) {
-		if (c->argc < 2)
-			ret = -1;
-		else
-			ret = do_dumpall(p,c->argv[1]);
-	} else if (strcmp(argv0,"dump") == 0) {
-		if (c->argc < 4)
-			ret = -1;
-		else
-			ret = do_dump(p,
-						strtoull(c->argv[1],NULL,16),
-						strtoull(c->argv[2],NULL,16),
-						c->argv[3]);
-	} else if (strcmp(argv0,"write") == 0) {
-		if (c->argc < 3)
-			ret = -1;
-		else
-			ret = do_write(p,
-						strtoull(c->argv[1],NULL,16),
-						c->argv[2]);
-	} else if (strcmp(argv0,"print") == 0) {
-		if (c->argc < 3)
-			ret = -1;
-		else
-			ret = do_print(p,
-						strtoull(c->argv[1],NULL,16),
-						strtoull(c->argv[2],NULL,16),
-						out);
-	} else {
-		fprintf(out,"?\n");
+
+	int i;
+	for (i=0;cmd_calls[i].argv0 != NULL;i++) {
+		if (strcmp(argv0,cmd_calls[i].argv0) == 0) {
+			ret = cmd_calls[i].func(out,c,p);
+		}
 	}
-	if (ret < 0) {
-		fprintf(out,"?\n");
-	}
+	return ret;
 }
 
 int cmd_loop(FILE *in,FILE *out) {
@@ -504,101 +515,159 @@ int cmd_loop(FILE *in,FILE *out) {
 		return -1;
 	char line[LINEMAX];
 	cmd *command = NULL;
+	int ret;
 
 	while (fgets(line,LINEMAX,in) != NULL) {
 		command = cmd_init();
 		if (command == NULL)
 			return -1;
 		cmd_parser(line,command);
-		cmd_execute(command, proc,in,out);
+		if (command->argc < 1)
+			continue;
+		if (strcmp(command->argv[0],"exit") == 0) {
+			process_clean(proc);
+			break;
+		}
+		ret = cmd_execute(command, proc,out);
+		if (ret == -1) {
+			fprintf(out,"?");
+			if (errno) {
+				fprintf(out,strerror(errno));
+				errno = 0;
+			}
+			fprintf(out,"\n");
+		}
 		cmd_free(command);
 	}
-	do_close(proc);
+	free(proc);
 	return 1;
 }
 
+int do_close(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 1)
+		return -1;
+	if (p->pid <= 0)
+		return -1;
 
-void do_exit(void) {
-	exit(EXIT_SUCCESS);
+	return (process_clean(p));
 }
 
-int do_open(process *p,pid_t pid) {
-	if (p == NULL)
+int do_dump(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
 		return -1;
-	if (p->pid > 0 || // p 已被使用
-		pid <= 0)
+	if (c->argc < 4)
 		return -1;
-		
-	return (process_open(pid,p));
-}
+	if (p->pid <= 0)
+		return -1;
 
-int do_close(process *p) {
-	if (p == NULL)
-		return -1;
-	process_close(p);
-	return 1;
-}
+	void *addr = (void *)strtoull(c->argv[1],NULL,16);
+	size_t len = (size_t)strtoull(c->argv[2],NULL,16);
+	char path[PATH_MAX];
 
-int do_info(process *p,FILE *out) {
-	if (p == NULL)
-		return -1;
-	return (process_show(p,out));
-}
+	snprintf(path,PATH_MAX,"%s_%d_%lx-%lx.mem",
+			c->argv[3],p->pid,
+			(unsigned long)addr,(unsigned long)addr + len);
 
-int do_dumpall(process *p,char *prefix) {
-	if (p == NULL)
+	int fd = open(path,O_WRONLY|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR);
+	if (fd == -1)
 		return -1;
-	if (prefix == NULL)
-		prefix = "";
-	return (process_mem_save_map_all(p,prefix));
-}
-
-int do_dump(process *p,unsigned long start,unsigned long end,char *prefix) {
-	if (p == NULL || start > end || prefix == NULL)
-		return -1;
-	void *addr_start = (void *)start;
-	size_t len = end - start;
-	return (process_mem_savetofile(p->pid,addr_start,len,prefix));
-}
-
-// 十六进制字符串转数据，返回结果的内存地址
-void *strhex2data(char *strhex,size_t *retlen) {
-	size_t buflen = strlen(strhex);
-	unsigned char buf[buflen];
-	sscanf(strhex,"%lx",buf);
-	*retlen = strlen(buf);
-	void *ret = calloc(1,*retlen);
-	memcpy(ret,buf,*retlen);
+	int ret = process_dumpm(p,addr,len,fd);
+	close(fd);
 	return ret;
 }
 
-int do_write(process *p,unsigned long start,char *data) {
-	if (p == NULL || start <= 0 || data == NULL)
+int do_info(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
 		return -1;
-	size_t datalen = 0;
-	void *databuf = strhex2data(data,&datalen);
-	if (datalen <= 0) {
-		free(databuf);
+	if (c->argc < 1)
 		return -1;
-	}
-	return (process_mem_write(p->pid,(void *)start,datalen,databuf));
+
+	return (process_show(p,out));
 }
 
-int do_print(process *p,unsigned long start,size_t len,FILE *out) {
-	if (p == NULL || start <= 0 || len <= 0 || out == NULL)
+int do_open(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
 		return -1;
-	void *buf = calloc(1,len);
-	if (process_mem_read(p->pid,(void *)start,len,buf) != len) {
+	if (c->argc < 2)
 		return -1;
-	}
-	uint8_t c;
+	if (p->pid > 0)
+		return -1;
+
+	pid_t pid = atoi(c->argv[1]);
+
+	return (process_open(pid,p));
+}
+
+int do_print(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 3)
+		return -1;
+	if (p->pid <= 0)
+		return -1;
+	
+	void *addr = (void *)strtoull(c->argv[1],NULL,16);
+	size_t len = strtoull(c->argv[2],NULL,16);
+
+	uint8_t *buf = calloc(1,len);
+	if (process_readm(p,addr,(void *)buf,len) == -1)
+		goto Err;
+
 	int i;
 	for (i=0;i<len;i++) {
-		c = *((char *)buf+i);
-		fprintf(out,"%x",c);
+		fprintf(out,"%x",
+				*(buf+i));
 	}
 	free(buf);
 	return 1;
+
+Err:
+	if (buf != NULL)
+		free(buf);
+	return -1;
+}
+
+char char2hex_table [16][2] = {
+{ '0', 0},  { '1', 1},  { '2', 2},  { '3', 3}, 
+{ '4', 4},  { '5', 5},  { '6', 6},  { '7', 7}, 
+{ '8', 8},  { '9', 9},  { 'A', 10}, { 'B', 11},
+{ 'C', 12}, { 'D', 13}, { 'E', 14}, { 'F', 15}
+};
+
+int strhex2data(char *str,void *data,size_t n) {
+	size_t i;
+	int j;
+	uint8_t *saveptr = (uint8_t *)data;
+	for (i=0;i<n;i++) {
+		for (j=0;j<16;j++) {
+			if (str[i] == char2hex_table[j][0]) {
+				saveptr[i] = char2hex_table[j][1];
+			}
+		}
+	}
+	return i;
+}
+
+int do_write(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 3)
+		return -1;
+	if (p->pid <= 0)
+		return -1;
+
+	void *addr = (void *)strtoull(c->argv[1],NULL,16);
+	size_t len = strlen(c->argv[2]);
+	uint8_t *data = calloc(1,len);
+	char *hexstr = c->argv[2];
+
+	strhex2data(hexstr,(void *)data,len);
+	int ret = process_writem(p,addr,data,len);
+	free(data);
+	
+	return ret;
 }
 
 int main(int argc, char *argv[]) {
