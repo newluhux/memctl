@@ -71,8 +71,12 @@ struct process {
 	pid_t pid; // 进程号
 	int regions; // 内存区域个数
 	map *maps[MAX_REGIONS]; // 内存区域信息
+	int (*read)(struct process *p,void *addr,void *buf,size_t count); // 内存读函数
+	int (*write)(struct process *p,void *addr,void *buf,size_t count); // 内存写函数
+	int procmemfd; // 如果使用 /proc/pid/mem 则使用此字段
 };
 typedef struct process process;
+
 
 /*
 使用calloc分配一个新的process结构需要的内存空间并初始化
@@ -94,6 +98,21 @@ p		存储进程信息的结构
 int process_open(pid_t pid,process *p);
 
 /*
+设置读写内存的方法
+
+method	选择方法:
+
+0	使用 process_vm_xx 方式
+1	读写 /proc/pid/mem 方式
+
+如果出错返回-1;
+*/
+
+#define DEFAULT_METHOD 1 // 默认使用的方式
+int process_set_read(int method, process *p);
+int process_set_write(int method, process *p);
+
+/*
 将p结构中的内容重置为0，指针指向的内存释放。
 
 如果出错返回-1
@@ -108,6 +127,15 @@ int process_clean(process *p);
 */
 
 int process_show(process *p,FILE *output);
+
+
+// procmem backend 读写 /proc/pid/mem 方法
+int procmem_read(process *p,void *addr,void *buf,size_t count);
+int procmem_write(process *p,void *addr,void *buf,size_t count);
+
+// procvm backend 调用 process_vm_xxx 方法
+int procvm_read(process *p,void *addr,void *buf,size_t count);
+int procvm_write(process *p,void *addr,void *buf,size_t count);
 
 /*
 读取目标进程的内存到buf
@@ -212,26 +240,28 @@ struct cmd_call {
 };
 typedef struct cmd_call cmd_call;
 
+int do_backend(FILE *out,cmd *c,process *p);
 int do_close(FILE *out,cmd *c,process *p);
 int do_dump(FILE *out,cmd *c,process *p);
 int do_info(FILE *out,cmd *c,process *p);
 int do_open(FILE *out,cmd *c,process *p);
 int do_print(FILE *out,cmd *c,process *p);
+int do_search(FILE *out,cmd *c,process *p);
 int do_write(FILE *out,cmd *c,process *p);
 
 // 命令对应函数列表
 static cmd_call cmd_calls[] = {
 	/*	argv0		function   */
+	{	"backend",	do_backend	},
 	{	"close",	do_close,	},
 	{	"dump",		do_dump,	},
 	{	"info",		do_info,	},
 	{	"open",		do_open,	},
 	{	"print",	do_print,	},
-	{	"write",	do_write,	}, 
+	{   "search",	do_search,	},
+	{	"write",	do_write,	},
 	{    NULL,		NULL,		},
 };
-
-
 
 map *map_init(void) {
 	map *n = (map*)calloc(1,sizeof(*n));
@@ -328,7 +358,7 @@ static void show_perms(int prot,int flags) {
 int map_show(map *m,FILE *output) {
 	if (m == NULL || output == NULL)
 		return -1;
-	fprintf(output,"virtual memory address range: %lx-%lx\n",
+	fprintf(output,"virtual memory address range: %lx %lx\n",
 			(unsigned long)m->addr_start,
 			(unsigned long)m->addr_end);
 	show_perms(m->prot,m->flags);
@@ -346,6 +376,7 @@ process *process_init(void) {
 	process *p = (process *)calloc(1,sizeof(*p));
 	p->pid = 0;
 	p->regions = 0;
+	p->procmemfd = -1;
 	return p;
 }
 
@@ -367,7 +398,39 @@ int process_open(pid_t pid,process *p) {
 		++(p->regions);
 	}
 	fclose(mapsfp);
+
+	if (process_set_read(DEFAULT_METHOD,p) == -1)
+		return -1;
+	if (process_set_write(DEFAULT_METHOD,p) == -1)
+		return -1;
 	return p->regions;
+}
+
+int process_set_read(int method, process *p) {
+	if (p == NULL)
+		return -1;
+	if (method == 0) {
+		p->read = procvm_read;
+	} else if (method == 1) {
+		p->read = procmem_read;
+	} else {
+		p->read = NULL;
+		return -1;
+	}
+	return 1;
+}
+int process_set_write(int method, process *p) {
+	if (p == NULL)
+		return -1;
+	if (method == 0) {
+		p->write = procvm_write;
+	} else if (method == 1) {
+		p->write = procmem_write;
+	} else {
+		p->write = NULL;
+		return -1;
+	}
+	return 1;	
 }
 
 int process_clean(process *p) {
@@ -386,6 +449,8 @@ int process_show(process *p,FILE *output) {
 	if (p == NULL)
 		return -1;
 	int i;
+	fprintf(output,"PID: %d\n",p->pid);
+	fprintf(output,"memory regions: %d\n",p->regions);
 	for (i=0;i<p->regions;i++) {
 		map_show(p->maps[i],output);
 		putchar('\n');
@@ -394,6 +459,10 @@ int process_show(process *p,FILE *output) {
 }
 
 int process_readm(process *p,void *addr,void *buf,size_t count) {
+	return (p->read(p,addr,buf,count));
+}
+
+int procvm_read(process *p,void *addr,void *buf,size_t count) {
 	if (p == NULL || addr == NULL)
 		return -1;
 	if (count == 0)
@@ -411,10 +480,37 @@ int process_readm(process *p,void *addr,void *buf,size_t count) {
 	ssize_t nread = process_vm_readv(p->pid,localiobuf,1,remoteiobuf,1,0);
 	if (nread != count)
 		return -1;
+
+	return 1;
+}
+
+int procmem_read(process *p,void *addr,void *buf,size_t count) {
+	if (p == NULL || addr == NULL || buf == NULL)
+		return -1;
+	if (count == 0)
+		return 0;
+	if (p->pid <= 0)
+		return -1;
+
+	if (p->procmemfd < 0) {
+		char path[PATH_MAX];
+		snprintf(path,PATH_MAX,"/proc/%d/mem",p->pid);
+		p->procmemfd = open(path,O_RDWR);
+		if (p->procmemfd == -1)
+			return -1;
+	}
+
+	if (pread(p->procmemfd,buf,count,(off_t)addr) != count)
+		return -1;
+
 	return 1;
 }
 
 int process_writem(process *p,void *addr,void *buf,size_t count) {
+	return (p->write(p,addr,buf,count));
+}
+
+int procvm_write(process *p,void *addr,void *buf,size_t count) {
 	if (p == NULL || addr == NULL)
 		return -1;
 	if (count == 0)
@@ -432,6 +528,29 @@ int process_writem(process *p,void *addr,void *buf,size_t count) {
 	ssize_t nwrite = process_vm_writev(p->pid,localiobuf,1,remoteiobuf,1,0);
 	if (nwrite != count)
 		return -1;
+
+	return 1;
+}
+
+int procmem_write(process *p,void *addr,void *buf,size_t count) {
+	if (p == NULL || addr == NULL || buf == NULL)
+		return -1;
+	if (count == 0)
+		return 0;
+	if (p->pid <= 0)
+		return -1;
+
+	if (p->procmemfd < 0) {
+		char path[PATH_MAX];
+		snprintf(path,PATH_MAX,"/proc/%d/mem",p->pid);
+		p->procmemfd = open(path,O_RDWR);
+		if (p->procmemfd == -1)
+			return -1;
+	}
+
+	if (pwrite(p->procmemfd,buf,count,(off_t)addr) != count)
+		return -1;
+	
 	return 1;
 }
 
@@ -540,6 +659,30 @@ int cmd_loop(FILE *in,FILE *out) {
 		cmd_free(command);
 	}
 	free(proc);
+	return 1;
+}
+
+int do_backend(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 2)
+		return -1;
+	if (p->pid <= 0)
+		return -1;
+
+	int method = 0;
+	if (strcmp(c->argv[1],"procmem") == 0)
+		method = 1;
+	else if (strcmp(c->argv[1],"procvm") == 0)
+		method = 0;
+	else
+		return -1;
+
+	int retr = process_set_read(method,p);
+	int retw = process_set_write(method,p);
+	if (retr == -1 || retw == -1)
+		return -1;
+
 	return 1;
 }
 
@@ -668,6 +811,10 @@ int do_write(FILE *out,cmd *c,process *p) {
 	free(data);
 	
 	return ret;
+}
+
+int do_search(FILE *out,cmd *c,process *p) {
+	return 1;
 }
 
 int main(int argc, char *argv[]) {

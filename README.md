@@ -38,6 +38,17 @@ open pid
 ```
 
 ```
+backend backendname
+
+backendname 可选:
+
+procvm	使用 process_vm_xxx 函数
+procmem	读写 /proc/pid/mem  文件
+
+设置读写进程内存的方法
+```
+
+```
 info
 
 格式化输出已经打开的进程信息
