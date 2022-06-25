@@ -22,8 +22,8 @@ open pid				打开进程
 info					格式化打印已经打开的进程信息
 close					清理进程
 dump start len prefix	把指定内存区域输出到文件中
-write address hex		往进程的内存区域写入数据
 print address len		读取内存区域并使用16进制格式打印
+write address hex		往进程的内存区域写入数据
 
 输出文件名:
 prefix_pid_start_end.mem
@@ -33,5 +33,5 @@ prefix_pid_start_end.mem
 v 已经实现
 x 未实现
 
-x 实现一个类似 dos debug 的界面用于修改内存
+v 实现一个类似 dos debug 的界面
 x 内置 lisp 解释器用于编写脚本
