@@ -28,7 +28,7 @@
    (map
     specification->package
     (list
-     "gdb" "strace" "gcc-toolchain"))
+     "screen" "tmux" "gdb" "strace" "gcc-toolchain"))
    %base-packages))
 
  (services %base-services))
