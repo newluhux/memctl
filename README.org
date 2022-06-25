@@ -1,0 +1,83 @@
+* 进程内存操作工具
+
+使用 C 实现的 Linux/Android 进程内存操作工具
+
+** 功能
+
+1. 查看进程内存内容
+   
+2. 把进程内存导出到文件
+   
+3. 修改进程内存内容
+   
+4. 在进程内存内容中搜索 (实现中)
+   
+** 特性
+
+支持多种方式读写进程内存
+
+1. 读写 /proc/pid/mem 方式(使用 backend procmem 命令切换)
+   
+2. process_vm_xxxx 方式(使用 backend procvm 命令切换)
+
+** 依赖
+
+1. libc
+
+** 构建
+
+#+BEGIN_SRC
+cc main.c -o memctl
+#+END_SRC
+
+** 使用
+
+#+BEGIN_SRC
+./memctl
+open 1045
+# 操作进程号为1045的进程
+
+info
+# 查看进程的信息
+
+部分输出:
+
+PID: 4628
+memory regions: 27
+virtual memory address range: 400000 401000
+perms: PROT_READ MAP_SHARED 
+offset: 0
+dev: 0:16
+inode: 3740617
+pathname: /home/luhux/SourceCode/memctl/test/a.out
+
+virtual memory address range: 1aad000 1ace000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: [heap]
+
+
+print 1aad000 FF
+# 打印1AAD000-1AAD0FF内存区域之间的数据，以16进制格式
+输出:
+0000000091200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+write 1aad000 ABCD
+# 在1AAD000-1AAD004内存区域之间写入ABCD
+print 1aad000 4
+# 查看写入的内容
+输出:
+abcd
+
+exit
+# 退出
+
+#+END_SRC
+
+** 开发计划
+
+- 已经实现 内置一个类似 dos debug 的命令行界面
+  
+- 尚未实现 内置一个Lisp解释器用于编写复杂逻辑的脚本
