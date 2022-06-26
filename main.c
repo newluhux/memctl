@@ -442,6 +442,9 @@ int process_clean(process *p) {
 	}
 	p->pid = 0;
 	p->regions = 0;
+	if (p->procmemfd >= 0)
+		close(p->procmemfd);
+	p->procmemfd = -1;
 	return p->regions;
 }
 
@@ -763,6 +766,7 @@ int do_print(FILE *out,cmd *c,process *p) {
 		fprintf(out,"%x",
 				*(buf+i));
 	}
+	fprintf(out,"\n");
 	free(buf);
 	return 1;
 
@@ -785,7 +789,7 @@ int strhex2data(char *str,void *data,size_t n) {
 	uint8_t *saveptr = (uint8_t *)data;
 	for (i=0;i<n;i++) {
 		for (j=0;j<16;j++) {
-			if (str[i] == char2hex_table[j][0]) {
+			if (toupper(str[i]) == char2hex_table[j][0]) {
 				saveptr[i] = char2hex_table[j][1];
 			}
 		}
@@ -814,6 +818,37 @@ int do_write(FILE *out,cmd *c,process *p) {
 }
 
 int do_search(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 4)
+		return -1;
+	if (p->pid <= 0)
+		return -1;
+
+	void *targetaddr = (void *)strtoull(c->argv[1],NULL,16);
+	size_t count = (size_t)strtoull(c->argv[2],NULL,16);
+	if (count == 0)
+		return 0;
+	unsigned char *buffer = calloc(1,count);
+
+	if (process_readm(p,targetaddr,buffer,count) == -1) {
+		free(buffer);
+		return -1;
+	}
+
+	size_t patternlen = strlen(c->argv[3]);
+	void *pattern = calloc(1,patternlen);
+	strhex2data(c->argv[3],pattern,patternlen);
+
+	unsigned char *bufferp;
+	for (bufferp=buffer;bufferp<=(buffer+count-patternlen);bufferp++) {
+		if (memcmp(bufferp,pattern,patternlen) == 0) {
+			fprintf(out,"%lx\n",
+					(unsigned long)(bufferp-buffer+targetaddr));
+		}
+	}
+
+
 	return 1;
 }
 
