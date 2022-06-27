@@ -258,9 +258,9 @@ static cmd_call cmd_calls[] = {
 	{	"info",		do_info,	},
 	{	"open",		do_open,	},
 	{	"print",	do_print,	},
-	{   "search",	do_search,	},
+	{	"search",	do_search,	},
 	{	"write",	do_write,	},
-	{    NULL,		NULL,		},
+	{	NULL,		NULL,		},
 };
 
 map *map_init(void) {
@@ -776,27 +776,6 @@ Err:
 	return -1;
 }
 
-char char2hex_table [16][2] = {
-{ '0', 0},  { '1', 1},  { '2', 2},  { '3', 3}, 
-{ '4', 4},  { '5', 5},  { '6', 6},  { '7', 7}, 
-{ '8', 8},  { '9', 9},  { 'A', 10}, { 'B', 11},
-{ 'C', 12}, { 'D', 13}, { 'E', 14}, { 'F', 15}
-};
-
-int strhex2data(char *str,void *data,size_t n) {
-	size_t i;
-	int j;
-	uint8_t *saveptr = (uint8_t *)data;
-	for (i=0;i<n;i++) {
-		for (j=0;j<16;j++) {
-			if (toupper(str[i]) == char2hex_table[j][0]) {
-				saveptr[i] = char2hex_table[j][1];
-			}
-		}
-	}
-	return i;
-}
-
 int do_write(FILE *out,cmd *c,process *p) {
 	if (out == NULL || c == NULL || p == NULL)
 		return -1;
@@ -806,12 +785,24 @@ int do_write(FILE *out,cmd *c,process *p) {
 		return -1;
 
 	void *addr = (void *)strtoull(c->argv[1],NULL,16);
-	size_t len = strlen(c->argv[2]);
-	uint8_t *data = calloc(1,len);
-	char *hexstr = c->argv[2];
+	size_t inputlen = strlen(c->argv[2]);
+	if (inputlen <= 0 || (inputlen % 2) != 0)
+		return -1;
+	size_t datalen = inputlen/2;
+	void *data = calloc(1,datalen); // 一个字节需要2位十六进制数字
 
-	strhex2data(hexstr,(void *)data,len);
-	int ret = process_writem(p,addr,data,len);
+	int i;
+	char twochar[3]; 
+	uint8_t *datap = data;
+	for (i=0;i<inputlen;i+=2) {
+		twochar[0] = c->argv[2][i];
+		twochar[1] = c->argv[2][i+1];
+		twochar[3] = '\0';
+		*datap = (uint8_t)strtoul(twochar,NULL,16);
+		datap++;
+	}
+
+	int ret = process_writem(p,addr,data,datalen);
 	free(data);
 	
 	return ret;
@@ -825,29 +816,56 @@ int do_search(FILE *out,cmd *c,process *p) {
 	if (p->pid <= 0)
 		return -1;
 
-	void *targetaddr = (void *)strtoull(c->argv[1],NULL,16);
-	size_t count = (size_t)strtoull(c->argv[2],NULL,16);
-	if (count == 0)
-		return 0;
-	unsigned char *buffer = calloc(1,count);
+	void *addr = (void *)strtoull(c->argv[1],NULL,16);
+	size_t buflen = (size_t)strtoull(c->argv[2],NULL,16);
+	void *buf = calloc(1,buflen);
 
-	if (process_readm(p,targetaddr,buffer,count) == -1) {
-		free(buffer);
+	if (process_readm(p,addr,buf,buflen) == -1) {
+		free(buf);
 		return -1;
 	}
 
-	size_t patternlen = strlen(c->argv[3]);
-	void *pattern = calloc(1,patternlen);
-	strhex2data(c->argv[3],pattern,patternlen);
+	size_t inputlen = strlen(c->argv[3]);
+	if (inputlen <= 0 || (inputlen % 2) != 0)
+		return -1;
+	size_t datalen = inputlen/2;
+	void *data = calloc(1,datalen); // 一个字节需要2位十六进制数字
 
-	unsigned char *bufferp;
-	for (bufferp=buffer;bufferp<=(buffer+count-patternlen);bufferp++) {
-		if (memcmp(bufferp,pattern,patternlen) == 0) {
-			fprintf(out,"%lx\n",
-					(unsigned long)(bufferp-buffer+targetaddr));
-		}
+	int i;
+	char twochar[3]; 
+	uint8_t *datap = data;
+	for (i=0;i<inputlen;i+=2) {
+		twochar[0] = c->argv[3][i];
+		twochar[1] = c->argv[3][i+1];
+		twochar[3] = '\0';
+		*datap = (uint8_t)strtoul(twochar,NULL,16);
+		datap++;
 	}
 
+	void *haystack = buf;
+	size_t haystack_len = buflen;
+
+	void *needle = data;
+	size_t needle_len = datalen;
+
+	void *haystackp = haystack;
+	size_t haystackp_len = haystack_len;
+
+	void *result;
+	while (1) {
+		if (haystackp >= haystack+haystack_len)
+			break;
+
+		result = (char *)memmem(haystackp,haystackp_len,needle,needle_len);
+		if (result == NULL)
+			break;
+		printf("%lx\n",result-haystack+addr);
+		haystackp = result + needle_len;
+		haystackp_len = (haystack+haystack_len)-haystackp;
+	}
+
+	free(buf);
+	free(data);
 
 	return 1;
 }
