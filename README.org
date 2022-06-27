@@ -30,6 +30,123 @@
 cc main.c -o memctl
 #+END_SRC
 
+** 命令
+
+*** open
+
+选中进程以供后续操作
+
+
+参数:
+
+pid   目标进程的pid号
+
+#+BEGIN_SRC
+  open 1234
+#+END_SRC
+
+*** close
+
+取消选中进程
+
+#+BEGIN_SRC
+  close
+#+END_SRC
+
+*** info
+
+格式化打印进程信息，包括:
+1. 进程PID
+   
+2. 内存区域数
+   
+3. 内存区域范围和信息
+
+
+#+BEGIN_SRC
+  info
+#+END_SRC
+
+*** backend
+
+切换使用的读写方式，默认procmem
+
+procmem 方式: 读写 /proc/pid/mem 文件
+procvm  方式: 调用 process_vm_xxx 函数
+
+#+BEGIN_SRC
+  backend procmem
+  backend procvm
+#+END_SRC
+
+*** dump
+
+将选中的内存导出到文件
+
+将操作的进程 4000000 到 400000F 之间的内容导出到 test-pid-4000000-400000F.mem 文件:
+
+#+BEGIN_SRC
+  dump 4000000 F test
+#+END_SRC
+
+*** dumpall
+
+将所有内存区域导出到文件
+
+#+BEGIN_SRC
+  dumpall /tmp/dump/pid/test
+#+END_SRC
+
+*** print
+
+打印选中内存中的内容
+
+#+BEGIN_SRC
+  print 40000 F
+#+END_SRC
+
+打印 40000 到 4000F 之间的内容
+
+*** search
+
+在选中内存中搜索内容，并打印找到的位置
+
+#+BEGIN_SRC
+  search 40000 F 4F2A
+#+END_SRC
+
+打印 40000 到 4000F 之间查找数据 4F2A
+
+注意:
+
+两个16进制数字组成一个字节:
+
+4     F       4F
+4bit  4bit    8bit
+
+输入的16进制数字个数必须为双数
+
+
+*** write
+
+在指定内存写入内容
+
+#+BEGIN_SRC
+  write 40000 4F2A
+#+END_SRC
+
+从 40000 开始，写入 4F2A
+
+注意:
+
+两个16进制数字组成一个字节:
+
+4     F       4F
+4bit  4bit    8bit
+
+输入的16进制数字个数必须为双数
+
+
 ** 使用
 
 #+BEGIN_SRC
