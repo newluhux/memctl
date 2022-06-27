@@ -243,6 +243,7 @@ typedef struct cmd_call cmd_call;
 int do_backend(FILE *out,cmd *c,process *p);
 int do_close(FILE *out,cmd *c,process *p);
 int do_dump(FILE *out,cmd *c,process *p);
+int do_dumpall(FILE *out,cmd *c,process *p);
 int do_info(FILE *out,cmd *c,process *p);
 int do_open(FILE *out,cmd *c,process *p);
 int do_print(FILE *out,cmd *c,process *p);
@@ -255,6 +256,7 @@ static cmd_call cmd_calls[] = {
 	{	"backend",	do_backend	},
 	{	"close",	do_close,	},
 	{	"dump",		do_dump,	},
+	{	"dumpall",	do_dumpall,	},
 	{	"info",		do_info,	},
 	{	"open",		do_open,	},
 	{	"print",	do_print,	},
@@ -724,6 +726,46 @@ int do_dump(FILE *out,cmd *c,process *p) {
 	int ret = process_dumpm(p,addr,len,fd);
 	close(fd);
 	return ret;
+}
+
+int do_dumpall(FILE *out,cmd *c,process *p) {
+	if (out == NULL || c == NULL || p == NULL)
+		return -1;
+	if (c->argc < 2)
+		return -1;
+	
+
+	int i;
+	void *start;
+	void *end;
+	size_t len;
+	char *prefix = c->argv[1];
+
+	char path[PATH_MAX];
+	int fd;
+
+	for (i=0;i<p->regions;i++) {
+		if (p->maps[i]->pathname != NULL)
+			if (strcmp(p->maps[i]->pathname,"[vvar]") == 0) // 跳过无法读取的[vvar]区域
+				continue;
+
+		start = p->maps[i]->addr_start;
+		end = p->maps[i]->addr_end;
+		len = (size_t)(end-start);
+		snprintf(path,PATH_MAX,"%s_%d_%lx-%lx.mem",
+				prefix,p->pid,(unsigned long)start,
+				(unsigned long)end);
+		fd = open(path,O_WRONLY|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR);
+		if (fd == -1) {
+			fprintf(out,"Can't open file %s",path);
+			perror(" ");
+			continue;
+		}
+		if (process_dumpm(p,start,len,fd) == -1)
+			return -1;
+		close(fd);
+	}
+	return 1;
 }
 
 int do_info(FILE *out,cmd *c,process *p) {
