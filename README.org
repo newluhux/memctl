@@ -121,11 +121,13 @@ procvm  方式: 调用 process_vm_xxx 函数
 
 两个16进制数字组成一个字节:
 
-4     F       4F
-4bit  4bit    8bit
+#+BEGIN_SRC
+4   4bit
+F   4bit
+4F  8bit
+#+END_SRC
 
 输入的16进制数字个数必须为双数
-
 
 *** write
 
@@ -141,8 +143,11 @@ procvm  方式: 调用 process_vm_xxx 函数
 
 两个16进制数字组成一个字节:
 
-4     F       4F
-4bit  4bit    8bit
+#+BEGIN_SRC
+4   4bit
+F   4bit
+4F  8bit
+#+END_SRC
 
 输入的16进制数字个数必须为双数
 
