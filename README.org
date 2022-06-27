@@ -34,46 +34,210 @@ cc main.c -o memctl
 
 #+BEGIN_SRC
 ./memctl
-open 1045
-# 操作进程号为1045的进程
-
-info
-# 查看进程的信息
-
-部分输出:
-
-PID: 4628
+> open 20654
+> info
+PID: 20654
 memory regions: 27
 virtual memory address range: 400000 401000
 perms: PROT_READ MAP_SHARED 
 offset: 0
 dev: 0:16
-inode: 3740617
+inode: 3787526
 pathname: /home/luhux/SourceCode/memctl/test/a.out
 
-virtual memory address range: 1aad000 1ace000
+virtual memory address range: 401000 402000
+perms: PROT_READ|PROT_EXEC MAP_SHARED 
+offset: 1000
+dev: 0:16
+inode: 3787526
+pathname: /home/luhux/SourceCode/memctl/test/a.out
+
+virtual memory address range: 402000 403000
+perms: PROT_READ MAP_SHARED 
+offset: 2000
+dev: 0:16
+inode: 3787526
+pathname: /home/luhux/SourceCode/memctl/test/a.out
+
+virtual memory address range: 403000 404000
+perms: PROT_READ MAP_SHARED 
+offset: 2000
+dev: 0:16
+inode: 3787526
+pathname: /home/luhux/SourceCode/memctl/test/a.out
+
+virtual memory address range: 404000 405000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 3000
+dev: 0:16
+inode: 3787526
+pathname: /home/luhux/SourceCode/memctl/test/a.out
+
+virtual memory address range: 630000 651000
 perms: PROT_READ|PROT_WRITE MAP_SHARED 
 offset: 0
 dev: 0:0
 inode: 0
 pathname: [heap]
 
+virtual memory address range: 7f453faf0000 7f453faf3000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: 
 
-print 1aad000 FF
-# 打印1AAD000-1AAD0FF内存区域之间的数据，以16进制格式
-输出:
-0000000091200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+virtual memory address range: 7f453faf3000 7f453fb15000
+perms: PROT_READ MAP_SHARED 
+offset: 0
+dev: 0:16
+inode: 346783
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/libc-2.33.so
 
-write 1aad000 ABCD
-# 在1AAD000-1AAD004内存区域之间写入ABCD
-print 1aad000 4
-# 查看写入的内容
-输出:
-abcd
+virtual memory address range: 7f453fb15000 7f453fc56000
+perms: PROT_READ|PROT_EXEC MAP_SHARED 
+offset: 22000
+dev: 0:16
+inode: 346783
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/libc-2.33.so
 
-exit
-# 退出
+virtual memory address range: 7f453fc56000 7f453fca6000
+perms: PROT_READ MAP_SHARED 
+offset: 163000
+dev: 0:16
+inode: 346783
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/libc-2.33.so
 
+virtual memory address range: 7f453fca6000 7f453fcaa000
+perms: PROT_READ MAP_SHARED 
+offset: 1b2000
+dev: 0:16
+inode: 346783
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/libc-2.33.so
+
+virtual memory address range: 7f453fcaa000 7f453fcac000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 1b6000
+dev: 0:16
+inode: 346783
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/libc-2.33.so
+
+virtual memory address range: 7f453fcac000 7f453fcb5000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: 
+
+virtual memory address range: 7f453fcb5000 7f453fcb9000
+perms: PROT_READ MAP_SHARED 
+offset: 0
+dev: 0:16
+inode: 555243
+pathname: /gnu/store/vjgf1wq7690zk0rsc301k7rpx3nhvjcm-gcc-12.1.0-lib/lib/libgcc_s.so.1
+
+virtual memory address range: 7f453fcb9000 7f453fcd0000
+perms: PROT_READ|PROT_EXEC MAP_SHARED 
+offset: 4000
+dev: 0:16
+inode: 555243
+pathname: /gnu/store/vjgf1wq7690zk0rsc301k7rpx3nhvjcm-gcc-12.1.0-lib/lib/libgcc_s.so.1
+
+virtual memory address range: 7f453fcd0000 7f453fcd4000
+perms: PROT_READ MAP_SHARED 
+offset: 1b000
+dev: 0:16
+inode: 555243
+pathname: /gnu/store/vjgf1wq7690zk0rsc301k7rpx3nhvjcm-gcc-12.1.0-lib/lib/libgcc_s.so.1
+
+virtual memory address range: 7f453fcd4000 7f453fcd5000
+perms: PROT_READ MAP_SHARED 
+offset: 1e000
+dev: 0:16
+inode: 555243
+pathname: /gnu/store/vjgf1wq7690zk0rsc301k7rpx3nhvjcm-gcc-12.1.0-lib/lib/libgcc_s.so.1
+
+virtual memory address range: 7f453fcd5000 7f453fcd6000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 1f000
+dev: 0:16
+inode: 555243
+pathname: /gnu/store/vjgf1wq7690zk0rsc301k7rpx3nhvjcm-gcc-12.1.0-lib/lib/libgcc_s.so.1
+
+virtual memory address range: 7f453fcd6000 7f453fcd8000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: 
+
+virtual memory address range: 7f453fcd8000 7f453fcd9000
+perms: PROT_READ MAP_SHARED 
+offset: 0
+dev: 0:16
+inode: 346774
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/ld-2.33.so
+
+virtual memory address range: 7f453fcd9000 7f453fcfc000
+perms: PROT_READ|PROT_EXEC MAP_SHARED 
+offset: 1000
+dev: 0:16
+inode: 346774
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/ld-2.33.so
+
+virtual memory address range: 7f453fcfc000 7f453fd05000
+perms: PROT_READ MAP_SHARED 
+offset: 24000
+dev: 0:16
+inode: 346774
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/ld-2.33.so
+
+virtual memory address range: 7f453fd05000 7f453fd07000
+perms: PROT_READ MAP_SHARED 
+offset: 2c000
+dev: 0:16
+inode: 346774
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/ld-2.33.so
+
+virtual memory address range: 7f453fd07000 7f453fd09000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 2e000
+dev: 0:16
+inode: 346774
+pathname: /gnu/store/5h2w4qi9hk1qzzgi1w83220ydslinr4s-glibc-2.33/lib/ld-2.33.so
+
+virtual memory address range: 7ffd78fc0000 7ffd78fe2000
+perms: PROT_READ|PROT_WRITE MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: [stack]
+
+virtual memory address range: 7ffd78ff1000 7ffd78ff5000
+perms: PROT_READ MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: [vvar]
+
+virtual memory address range:  7ffd78ff7000
+perms: PROT_READ|PROT_EXEC MAP_SHARED 
+offset: 0
+dev: 0:0
+inode: 0
+pathname: [vdso]
+
+> dump 7ffd78ff5000 FF vdsoheadFF
+> print 7ffd78ff5000 FF
+7f454c46211000000000303e01000b0600000040000000020e000000000040038040400100f0100050000000000000000000000000006cd0000006cd00000001000000020004000e03000000e03000000e0300000020100000020100000080000000400040000500000005000000050000005400000005400000004000000050e57464400054500000054500000
+> write 7ffd78ff5000 0123456789ABCDEF
+> print 7ffd78ff5000 FF
+123456789abcdef00000000303e01000b0600000040000000020e000000000040038040400100f0100050000000000000000000000000006cd0000006cd00000001000000020004000e03000000e03000000e0300000020100000020100000080000000400040000500000005000000050000005400000005400000004000000050e57464400054500000054500000
+search 7ffd78ff5000 FF 50e5
+7ffd78ff50e8
+> print 7ffd78ff50e8 4
+50e57464
+> exit
 #+END_SRC
 
 ** 开发计划

@@ -639,6 +639,7 @@ int cmd_loop(FILE *in,FILE *out) {
 	cmd *command = NULL;
 	int ret;
 
+	fprintf(out,"> ");
 	while (fgets(line,LINEMAX,in) != NULL) {
 		command = cmd_init();
 		if (command == NULL)
@@ -660,6 +661,7 @@ int cmd_loop(FILE *in,FILE *out) {
 			fprintf(out,"\n");
 		}
 		cmd_free(command);
+		fprintf(out,"> ");
 	}
 	free(proc);
 	return 1;
