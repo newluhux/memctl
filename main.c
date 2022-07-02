@@ -657,7 +657,7 @@ int cmd_loop(FILE *in,FILE *out) {
 		if (ret == -1) {
 			fprintf(out,"?");
 			if (errno) {
-				fprintf(out,strerror(errno));
+				fprintf(out,"%s",strerror(errno));
 				errno = 0;
 			}
 			fprintf(out,"\n");
@@ -841,7 +841,7 @@ int do_write(FILE *out,cmd *c,process *p) {
 	for (i=0;i<inputlen;i+=2) {
 		twochar[0] = c->argv[2][i];
 		twochar[1] = c->argv[2][i+1];
-		twochar[3] = '\0';
+		twochar[2] = '\0';
 		*datap = (uint8_t)strtoul(twochar,NULL,16);
 		datap++;
 	}
@@ -881,7 +881,7 @@ int do_search(FILE *out,cmd *c,process *p) {
 	for (i=0;i<inputlen;i+=2) {
 		twochar[0] = c->argv[3][i];
 		twochar[1] = c->argv[3][i+1];
-		twochar[3] = '\0';
+		twochar[2] = '\0';
 		*datap = (uint8_t)strtoul(twochar,NULL,16);
 		datap++;
 	}
@@ -903,7 +903,7 @@ int do_search(FILE *out,cmd *c,process *p) {
 		result = (char *)memmem(haystackp,haystackp_len,needle,needle_len);
 		if (result == NULL)
 			break;
-		printf("%lx\n",result-haystack+addr);
+		printf("%lx\n",(unsigned long)(result-haystack+addr));
 		haystackp = result + needle_len;
 		haystackp_len = (haystack+haystack_len)-haystackp;
 	}
